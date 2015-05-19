@@ -56,7 +56,7 @@ var vikus = (function() {
 			}
 		})
 		console.log("höhe und breite sind nummern zwischen 50 und 5000")
-		console.log("anzahl nicht gefundener: "+anzahlHB)
+		console.log("anzahl nicht gefundener höhe oder breite: "+anzahlHB)
 
 		var materialSet = new MySet()
 		Object.values(obj).forEach(e => {
@@ -92,16 +92,23 @@ var vikus = (function() {
 		console.log("countTagsSet")
 		console.log(countTagsSet.getSorted())
 
-		if (false)
+		//if (false)
 			Object.values(obj).forEach(e => {
 				var url = "data/bilder_100/"+e.id+".jpg"
 				var img = new Image()
 				document.body.appendChild(img)
-				img.onerror = (() => {
-					console.assert(false)
-				})
+				img.onerror = (() => console.assert(false))
 				img.src = url
 			})
+
+		if (false)
+			Object.values(obj).forEach(e => {
+				if (e.zeit) {
+					console.log(e.zeit)
+				}
+			})
+
+
 
 		console.log("done.")
 	}
