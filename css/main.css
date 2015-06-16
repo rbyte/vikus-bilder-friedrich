@@ -14,26 +14,57 @@
 	border: 1px grey solid;
 }
 
-@keyframes spin {
-	0% {transform: scale(1);}
-	50% {transform: scale(2);}
-	100% {transform: scale(1);}
+/*@keyframes spin {*/
+	/*0% {transform: scale(1);}*/
+	/*50% {transform: scale(2);}*/
+	/*100% {transform: scale(1);}*/
+/*}*/
+/*@-webkit-keyframes spin {*/
+	/*0% {transform: scale(1);}*/
+	/*50% {transform: scale(2);}*/
+	/*100% {transform: scale(1);}*/
+/*}*/
+
+/*#vis svg image {*/
+	/*transform-origin: center center;*/
+	/*animation-name: spin;*/
+	/*animation-duration: 1500ms;*/
+	/*animation-timing-function: ease-in-out;*/
+	/*animation-iteration-count: infinite;*/
+
+	/*-webkit-animation-name: spin;*/
+	/*-webkit-animation-duration: 1500ms;*/
+	/*-webkit-animation-timing-function: ease-in-out;*/
+	/*-webkit-animation-iteration-count: infinite;*/
+/*}*/
+
+
+table {
+	margin: 1%;
 }
-@-webkit-keyframes spin {
-	0% {transform: scale(1);}
-	50% {transform: scale(2);}
-	100% {transform: scale(1);}
+thead {
+	background-color: lightgrey;
+	font-weight: bold;
+}
+td {
+	border: 1px solid grey;
+	padding: 10px;
 }
 
-#vis svg image {
-	transform-origin: center center;
-	animation-name: spin;
-	animation-duration: 1500ms;
-	animation-timing-function: ease-in-out;
-	animation-iteration-count: infinite;
 
-	-webkit-animation-name: spin;
-	-webkit-animation-duration: 1500ms;
-	-webkit-animation-timing-function: ease-in-out;
-	-webkit-animation-iteration-count: infinite;
-}
+
+
+/*.bar rect {*/
+	/*fill: steelblue;*/
+	/*shape-rendering: crispEdges;*/
+/*}*/
+
+/*.bar text {*/
+	/*fill: #fff;*/
+/*}*/
+
+/*.axis path, .axis line {*/
+	/*fill: none;*/
+	/*stroke: #000;*/
+	/*shape-rendering: crispEdges;*/
+/*}*/
