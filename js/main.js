@@ -1,13 +1,37 @@
+/*
+ This is free software.
+ License: GNU Affero General Public License 3
+ Copyright (C) 2015 Matthias Graf
+ matthias.graf <a> mgrf.de
+*/
 
 var vikus = (function(vikus = {}) {
 
+	var domSvg
+	var svg
+	var svgContainer
+	var svgWidth, svgHeight
+	var defaultSvgViewboxHeight = 500
+	var svgViewboxX = -defaultSvgViewboxHeight/2
+	var svgViewboxY = -defaultSvgViewboxHeight/2
+	var svgViewboxWidth = defaultSvgViewboxHeight
+	var svgViewboxHeight = defaultSvgViewboxHeight
+	var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
+	var zoomTransitionDuration = 150
+
+	var histObj = {
+		histWidth: 100,
+		histHeight: 50,
+		startYear: 1810,
+		endYear: 1856,
+		numberOfBars: 46,
+		numberOfInBarColumns: 4,
+		columnMargin: 0.8,
+		blockMargin: 0.8
+	}
+
+
 	vikus.init = function() {
-		//loadJson("data/spsg_NEU.json", withData)
-
-	/*Könntest Du die Kategoriennamen auch einmal mit den "tags", also den Indexbezeichnungen, abgleichen? Im Fall von "Landschaften" und "Schnörkel" sind nur wenige GK Nummern aus dem Ausstellungskatalog in unserer Datenbank, aber die Kategorien aus dem Katalog "Landschaft" und "Schnörkel" sind als Indexbezeichnungen vergeben.
-
-	 Außerdem: In Fällen wie "Literatur" -> "Literaturdarstellungen"+Kinder, das auch als "Mutter" im Index als Begriff vergeben ist, die Kinder hinzufügen zu der Kategorie unten.
-	 */
 		var fields = {
 			cat: {path: "data/kategorien_aus_ausstellungskatalog.json"},
 			spsg: {path: "data/spsg.json"}
@@ -17,18 +41,52 @@ var vikus = (function(vikus = {}) {
 
 		if (false)
 			draw()
+
+		setupView()
 	}
 
-	Object.values = function(obj) {
-		return Object.keys(obj).map(function(key) {
-			return obj[key]
-		})
+	function setupView() {
+		svgContainer = d3.select("#vis")
+		domSvg = document.querySelector("#vis svg")
+		svg = d3.select("#vis svg")
+		svg.attr("xmlns", "http://www.w3.org/2000/svg")
+			.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+
+		window.onresize = function(event) { updateScreenElemsSize() }
+		window.onresize()
+
+		setupUIeventListeners()
 	}
 
-	console.logToHTML = function(x) {
-		document.body.appendChild(document.createTextNode(x))
-		document.body.appendChild(document.createElement("BR"))
+	function updateScreenElemsSize() {
+		var bb = svgContainer.node().getBoundingClientRect()
+		if (bb.width <= 0 || bb.height <= 0)
+			return
+		svgWidth = bb.width
+		svgHeight = bb.height
+		//svgContainer.style({height: svgHeight+"px"})
+		updateViewbox()
 	}
+
+
+	function updateViewbox(transition) {
+		console.assert(svgViewboxHeight > 0)
+		console.assert(svgViewboxWidth > 0)
+		console.assert(svgWidth > 0)
+		console.assert(svgHeight > 0)
+
+		// keep height stable and center (on startup to 0,0)
+		// make viewbox aspect fit into the container aspect
+		var svgViewboxWidthPrevious = svgViewboxWidth
+		svgViewboxWidth = svgViewboxHeight * svgWidth/svgHeight
+		svgViewboxX -= (svgViewboxWidth - svgViewboxWidthPrevious)/2
+		var elem = !transition ? svg : svg.transition()
+			.duration(zoomTransitionDuration)
+
+		elem.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+	}
+
+
 
 	function withData(fields) {
 		var obj = fields.spsg.data
@@ -200,15 +258,6 @@ var vikus = (function(vikus = {}) {
 
 
 		if (false) {
-		var svgViewboxX = -250
-		var svgViewboxY = -250
-		var svgViewboxWidth = 500
-		var svgViewboxHeight = 500
-
-		var svg = d3.select("#vis")
-			.append("svg")
-			.attr("xmlns", "http://www.w3.org/2000/svg")
-			.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
 			var result = []
 			var count = 0
 			tagSet.getSortedArray().forEach(function([tag, frequency]) {
@@ -241,12 +290,17 @@ var vikus = (function(vikus = {}) {
 		}
 
 
+		var text = svg.append("text")
+			.attr("x", 220).attr("y", -230)
+			.text("position")
 
+		svg.on("mousemove", function() {
+			var mouse = d3.mouse(svg.node())
+			text.text(Math.floor(mouse[0])+" x "+Math.floor(mouse[1]))
+		})
 
-
-		histogram(obj)
-
-
+		histObj.obj = obj
+		histObj.draw()
 
 		console.log("done.")
 	}
@@ -286,65 +340,84 @@ var vikus = (function(vikus = {}) {
 
 
 
+	function setupUIeventListeners() {
+		function zoom(event) {
+			var wheelMovement = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)))
+			// ok, I cheated a bit ...
+			d3.event = event
+			var mouse = d3.mouse(domSvg)
+
+			var xDelta = svgViewboxWidth * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+			var yDelta = svgViewboxHeight * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+			// zoom towards the current mouse position
+			var relX = (mouse[0]-svgViewboxX)/svgViewboxWidth // in [0,1]
+			var relY = (mouse[1]-svgViewboxY)/svgViewboxHeight // in [0,1]
+			svgViewboxX -= xDelta * relX
+			svgViewboxY -= yDelta * relY
+			svgViewboxWidth += xDelta
+			svgViewboxHeight += yDelta
+			d3.event = null
+
+			histObj.numberOfInBarColumns += wheelMovement
+			histObj.draw()
+
+			updateViewbox(true/* with transition */)
+		}
+
+		// IE9, Chrome, Safari, Opera
+		domSvg.addEventListener("mousewheel", zoom, false)
+		// Firefox
+		domSvg.addEventListener("DOMMouseScroll", zoom, false)
+
+		svg.call(d3.behavior.drag()
+			.on("drag", function (d) {
+				svgViewboxX -= d3.event.dx*(svgViewboxWidth/svgWidth)
+				svgViewboxY -= d3.event.dy*(svgViewboxHeight/svgHeight)
+				updateViewbox()
+			})
+		)
+	}
 
 
+	histObj.draw = function() {
+		var self = this
+		var obj = self.obj
 
+		var histWidth = self.histWidth
+		var histHeight = self.histHeight
+		var startYear = self.startYear
+		var endYear = self.endYear
+		var numberOfBars = self.numberOfBars
+		var numberOfInBarColumns = self.numberOfInBarColumns
+		var columnMargin = self.columnMargin
+		var blockMargin = self.blockMargin
 
+		var currentYear = 1810
+		var currentAmount = 0
 
-	function histogram(obj) {
-		var svgViewboxX = -250
-		var svgViewboxY = -250
-		var svgViewboxWidth = 500
-		var svgViewboxHeight = 500
-
-		var svg = d3.select("#vis")
-			.append("svg")
-			.attr("xmlns", "http://www.w3.org/2000/svg")
-			.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
-
-		var g = svg.append("g").attr("transform", "translate(-500,-250) scale(10)")
-
-		var text = svg.append("text")
-			.attr("x", 220).attr("y", -230)
-			.text("position")
-
-		var histWidth = 100
-		var histHeight = 50
-		g.append("rect").attr({x: 0, y: 0, width: histWidth, height: histHeight})
-			.style({fill: "#000", "fill-opacity": 0.05})
-
-		svg.on("mousemove", function() {
-			var mouse = d3.mouse(svg.node())
-			text.text(Math.floor(mouse[0])+" x "+Math.floor(mouse[1]))
-		})
-
-		var startYear = 1810
-		var endYear = 1856
-		var numberOfBars = 46
+		var g
+		if (!histObj.g) {
+			g = histObj.g = svg.append("g").attr("transform", "translate(-500,-250) scale(10)")
+			g.append("rect").attr({x: 0, y: 0, width: histWidth, height: histHeight})
+				.style({fill: "#000", "fill-opacity": 0.05})
+		}
 
 		var sortedByYear = Object.values(obj).sort(function(a,b) {
 			return a.jahr > b.jahr ? 1 : -1
 		})
-
 		var yearHistogram = new MySet()
-
 		sortedByYear.forEach(function(e) {
 			console.assert(e.jahr)
 			yearHistogram.add(e.jahr)
 		})
 
 		// produktivste jahre:
-		console.log(yearHistogram.getSorted())
+		//console.log(yearHistogram.getSorted())
 
-		var currentYear = 1810
-		var currentAmount = 0
-		var numberOfInBarColumns = 4
 		var columnWidthTotal = histWidth/numberOfBars
-		var columnMargin = 0.8
 		var columnWidth = columnWidthTotal*columnMargin
 
 		var blockTotal = columnWidth/numberOfInBarColumns
-		var blockMargin = 0.8
 		var block = blockTotal*blockMargin
 
 		sortedByYear.forEach(function(e) {
@@ -362,14 +435,13 @@ var vikus = (function(vikus = {}) {
 			var x = (currentYear-startYear)/(endYear-startYear+1)*histWidth + inBarColumnNo*blockTotal
 			var y = histHeight-(1+currentAmount-inBarColumnNo*totalPerInBarColumn) *blockTotal
 
-			g.append("rect").attr({x: x, y: y, width: block, height: block})
+			var rect = e.histogramRect ? e.histogramRect : g.append("rect")
+
+			e.histogramRect = rect
+				.attr({x: x, y: y, width: block, height: block})
 				.style({fill: "#009", "fill-opacity": 0.3})
 		})
-
-
 	}
-
-
 
 
 
@@ -413,7 +485,6 @@ var vikus = (function(vikus = {}) {
 				})
 		})
 
-		var domSvg = document.querySelector("#vis svg")
 		var zoomFactor = 1.15 // macs tend to have finer grain mouse wheel ticks
 
 		function zoom(event) {
@@ -448,58 +519,17 @@ var vikus = (function(vikus = {}) {
 	}
 
 
-
-
-	function MySet() {
-		var self = this
-		self.entriesAndFrequency = new Map()
+	// global tools
+	Object.values = function(obj) {
+		return Object.keys(obj).map(function(key) {
+			return obj[key]
+		})
 	}
 
-	MySet.prototype.add = function(e) {
-		var self = this
-		if (self.entriesAndFrequency.has(e)) {
-			self.entriesAndFrequency.set(e, self.entriesAndFrequency.get(e)+1)
-		} else {
-			self.entriesAndFrequency.set(e, 1)
-		}
+	console.logToHTML = function(x) {
+		document.body.appendChild(document.createTextNode(x))
+		document.body.appendChild(document.createElement("BR"))
 	}
-
-	MySet.prototype.get = function(e) {
-		var self = this
-		return e ? self.entriesAndFrequency.get(e) : self.entriesAndFrequency
-	}
-
-	MySet.prototype.getAsArray = function() {
-		var self = this
-		var result = []
-		for (var e of self.entriesAndFrequency.entries())
-			result.push(e[0])
-		return result
-	}
-
-	MySet.prototype.getSortedArray = function() {
-		var self = this
-		var result = []
-		for (var e of self.entriesAndFrequency.entries())
-			result.push(e)
-		result.sort(function(e1, e2) { return e1[1] < e2[1] ? 1 : -1 })
-		return result
-	}
-
-	MySet.prototype.getSorted = function() {
-		var self = this
-		// harmony solution:
-		//var result = [...self.entriesAndFrequency].sort(([k1, v1], [k2, v2]) => v1 < v2 ? 1 : -1)
-		//return result.map(([key, entry]) => key+": "+entry)
-
-		var result = []
-		for (var e of self.entriesAndFrequency.entries())
-			result.push(e)
-		result.sort(function(e1, e2) { return e1[1] < e2[1] ? 1 : -1 })
-		return result.map(function(e) { return e[0]+": "+e[1] })
-	}
-
-
 
 
 	return vikus
