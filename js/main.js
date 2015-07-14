@@ -24,6 +24,7 @@ var vikus = (function(vikus = {}) {
 
 	var histG
 	var histBox = {x: 0, y: 0, width: 1000, height: 250}
+	var histElemBaseFill = "#424242"
 	var numberOfInBarColumns = 3
 	var columnMargin = 0.8
 	var blockMargin = 0.8
@@ -66,7 +67,6 @@ var vikus = (function(vikus = {}) {
 		svgHeight = bb.height
 		//svgContainer.style({height: svgHeight+"px"})
 		updateViewbox()
-		adaptivePictureLoad()
 	}
 
 
@@ -85,22 +85,28 @@ var vikus = (function(vikus = {}) {
 			.duration(zoomTransitionDuration)
 
 		elem.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+		adaptivePictureLoad()
 	}
 
 	function adaptivePictureLoad() {
 		// size can be: 100, 500, 1000, 2000, full
+		var windowWidth = window.innerWidth
+		var windowHeight = window.innerHeight
 
 		if (obj)
-		allValues(obj).forEach(function(e) {
-			if (e.histogramRect) {
-				var size = svgViewboxWidth < 200 ? 500 : 100
-				var bb = e.histogramRect.node().getBoundingClientRect()
-				var insideWindow = !(bb.right < 0 || bb.bottom < 0 || bb.left > 2000 || bb.top > 2000)
-				if (insideWindow) {
-					e.histogramRect.attr("xlink:href", "data/bilder_"+size+"/"+e.id+".jpg")
+			allValues(obj).forEach(function(e) {
+				if (e.histogramRect) {
+					var size = svgViewboxWidth < 100 ? 500 : 100
+					var bb = e.histogramRect.node().getBoundingClientRect()
+					//console.log(bb)
+					var insideWindow = !(bb.right < 0 || bb.bottom < 0 || bb.left > windowWidth || bb.top > windowHeight)
+					if (insideWindow) {
+						e.histogramImage.attr("xlink:href", "data/bilder_"+size+"/"+e.id+".jpg")
+						if (size === 500 || false) // debug
+							e.histogramRect.style({fill: "green"})
+					}
 				}
-			}
-		})
+			})
 	}
 
 
@@ -383,16 +389,16 @@ var vikus = (function(vikus = {}) {
 			var x = (currentYear-startYear)/(endYear-startYear+1)*histBox.width + inBarColumnNo*blockTotal
 			var y = histBox.height-(1+currentAmount-inBarColumnNo*totalPerInBarColumn) *blockTotal
 
-			e.histogramRect = e.histogramRect ? e.histogramRect : histG.append("image").attr("xlink:href", "data/bilder_100/"+e.id+".jpg")
+			e.histogramRect = e.histogramRect ? e.histogramRect : histG.append("rect").style({fill: histElemBaseFill})
+			e.histogramImage = e.histogramImage ? e.histogramImage : histG.append("image")
+				.attr({"xlink:href": "data/bilder_100/"+e.id+".jpg", onclick: "document.location.href = 'http://bestandskataloge.spsg.de/FWIV/"+e.id+"';"})
 
+			e.histogramRect
+				.attr({x: x, y: y, width: blockTotal, height: blockTotal})
+			e.histogramRect.attr({onclick: 'console.log(this.getBoundingClientRect())'})
 
-			e.histogramRect.transition().duration(900)
+			e.histogramImage.transition().duration(900)
 				.attr({x: x, y: y, width: block, height: block})
-
-			//e.histogramRect.transition().duration(900)
-			//	.attr({x: x, y: y, width: block, height: block})
-			//	.style({fill: "#009", "fill-opacity": 0.3})
-
 		})
 	}
 
@@ -401,7 +407,7 @@ var vikus = (function(vikus = {}) {
 		var count = 0
 		var numberOfElemsThreshold = 40
 
-		tagCloudG = tagCloudG ? tagCloudG : svg.append("g")
+		tagCloudG = tagCloudG ? tagCloudG : svg.append("g").attr("id", "tagCloud")
 		tagCloudG.attr("transform", "translate(-500,-230)")
 
 		tagCloudG.append("rect").attr(tagCloudBox)
@@ -461,13 +467,13 @@ var vikus = (function(vikus = {}) {
 				text.on("mouseover", (tagName => () => {
 					allValues(obj).forEach(e => {
 						if (e.tags.indexOf(tagName) !== -1)
-							e.histogramRect.style({fill: "#f09", "fill-opacity": 0.3})
+							e.histogramRect.style({fill: "red"})
 					})
 				})(tag.name))
 
 				text.on("mouseout", (tagName => () => {
 					allValues(obj).forEach(e => {
-						e.histogramRect.style({fill: "#009", "fill-opacity": 0.3})
+						e.histogramRect.style({fill: histElemBaseFill})
 					})
 				})(tag.name))
 
@@ -497,9 +503,6 @@ var vikus = (function(vikus = {}) {
 					return
 				// getBoundingClientRect() gets the DOMRect, getBBox() the SVGRect !
 				var a = convertSVGCenteredTextRectToDOMRect(text.node().getBBox())
-
-				//tags[tag.name].cloudRect = tags[tag.name].cloudRect ? tags[tag.name].cloudRect : tagCloudG.append("rect")
-				//tags[tag.name].cloudRect.attr(a).style({fill: "#080", "fill-opacity": 0.1})
 
 				allValues(tags).forEach(function(tagB) {
 					if (tag !== tagB) {
