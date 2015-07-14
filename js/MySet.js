@@ -17,20 +17,11 @@ MySet.prototype.get = function(e) {
 	return e ? self.entriesAndFrequency.get(e) : self.entriesAndFrequency
 }
 
-MySet.prototype.getAsArray = function() {
+MySet.prototype.getAll = function() {
 	var self = this
 	var result = []
 	for (var e of self.entriesAndFrequency.entries())
 		result.push(e[0])
-	return result
-}
-
-MySet.prototype.getSortedArray = function() {
-	var self = this
-	var result = []
-	for (var e of self.entriesAndFrequency.entries())
-		result.push(e)
-	result.sort(function(e1, e2) { return e1[1] < e2[1] ? 1 : -1 })
 	return result
 }
 
