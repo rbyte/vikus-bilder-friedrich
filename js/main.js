@@ -265,7 +265,7 @@ var vikus = (function(vikus = {}) {
 			text.text(Math.floor(mouse[0])+" x "+Math.floor(mouse[1]))
 		})
 
-		draw()
+		histogram()
 		tagCloud()
 
 		console.log("done.")
@@ -350,7 +350,7 @@ var vikus = (function(vikus = {}) {
 	}
 
 
-	function draw() {
+	function histogram() {
 		var numberOfBars = 46
 		var currentYear = 1810
 		var currentAmount = 0
