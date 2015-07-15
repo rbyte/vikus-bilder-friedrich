@@ -12,25 +12,28 @@ var vikus = (function(vikus = {}) {
 	var svgContainer
 	var svgWidth, svgHeight
 	var defaultSvgViewboxHeight = 500
-	var svgViewboxX = -defaultSvgViewboxHeight/2
-	var svgViewboxY = -defaultSvgViewboxHeight/2
-	var svgViewboxWidth = defaultSvgViewboxHeight
-	var svgViewboxHeight = defaultSvgViewboxHeight
+	var svgViewbox = {
+		x: -defaultSvgViewboxHeight/2,
+		y: -defaultSvgViewboxHeight/2,
+		width: defaultSvgViewboxHeight,
+		height: defaultSvgViewboxHeight
+	}
 	var zoomFactor = 1.4 // macs tend to have finer grain mouse wheel ticks
 	var zoomTransitionDuration = 150
 
 	var obj
 	var cat
 
-	var histG
-	var histBox = {x: 0, y: 0, width: 1000, height: 250}
+	var histSvg
+	var histBox = {x: 0, y: 0, width: 1000, height: 280}
+	var histViewBox = {x: 0, y: 0, width: 1000, height: 280}
 	var histElemBaseFill = "#424242"
 	var numberOfInBarColumns = 3
 	var columnMargin = 0.8
 	var blockMargin = 0.8
 
 	var tagCloudG
-	var tagCloudBox = {x: 0, y: 0, width: 1000, height: 220}
+	var tagCloudBox = {x: 0, y: 0, width: 1000, height: 180}
 
 	var startYear = 1810
 	var endYear = 1856
@@ -51,12 +54,10 @@ var vikus = (function(vikus = {}) {
 		domSvg = document.querySelector("#vis svg")
 		svg = d3.select("#vis svg")
 		svg.attr("xmlns", "http://www.w3.org/2000/svg")
-			.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+			.attr("viewBox", svgViewbox.x+" "+svgViewbox.y+" "+svgViewbox.width+" "+svgViewbox.height)
 
 		window.onresize = function(event) { updateScreenElemsSize() }
 		window.onresize()
-
-		setupUIeventListeners()
 	}
 
 	function updateScreenElemsSize() {
@@ -69,23 +70,72 @@ var vikus = (function(vikus = {}) {
 		updateViewbox()
 	}
 
-
 	function updateViewbox(transition) {
-		console.assert(svgViewboxHeight > 0)
-		console.assert(svgViewboxWidth > 0)
+		console.assert(svgViewbox.height > 0)
+		console.assert(svgViewbox.width > 0)
 		console.assert(svgWidth > 0)
 		console.assert(svgHeight > 0)
 
 		// keep height stable and center (on startup to 0,0)
 		// make viewbox aspect fit into the container aspect
-		var svgViewboxWidthPrevious = svgViewboxWidth
-		svgViewboxWidth = svgViewboxHeight * svgWidth/svgHeight
-		svgViewboxX -= (svgViewboxWidth - svgViewboxWidthPrevious)/2
+		var svgViewboxWidthPrevious = svgViewbox.width
+		svgViewbox.width = svgViewbox.height * svgWidth/svgHeight
+		svgViewbox.x -= (svgViewbox.width - svgViewboxWidthPrevious)/2
 		var elem = !transition ? svg : svg.transition()
 			.duration(zoomTransitionDuration)
 
-		elem.attr("viewBox", svgViewboxX+" "+svgViewboxY+" "+svgViewboxWidth+" "+svgViewboxHeight)
+		setViewBox(elem, svgViewbox)
+	}
+
+	function updateHistogramViewbox(transition) {
+		console.assert(histViewBox.height > 0)
+		console.assert(histViewBox.width > 0)
+		console.assert(svgWidth > 0)
+		console.assert(svgHeight > 0)
+
+		// keep height stable and center (on startup to 0,0)
+		// make viewbox aspect fit into the container aspect
+		var svgViewboxWidthPrevious = histViewBox.width
+		histViewBox.width = histViewBox.height * histBox.width/histBox.height
+		histViewBox.x -= (histViewBox.width - svgViewboxWidthPrevious)/2
+
+		// in bounds!
+		histViewBox.x = Math.max(0, Math.min(histViewBox.x, histBox.x+histBox.width-histViewBox.width))
+		histViewBox.y = Math.max(0, Math.min(histViewBox.y, histBox.y+histBox.height-histViewBox.height))
+		histViewBox.width = Math.max(3 /*max zoom stage*/, Math.min(histViewBox.width, histBox.width))
+		histViewBox.height = Math.max(0, Math.min(histViewBox.height, histBox.height))
+
+		var elem = !transition ? histSvg : histSvg.transition()
+			.duration(zoomTransitionDuration)
+
+		setViewBox(elem, histViewBox)
 		adaptivePictureLoad()
+	}
+
+	function histZoom(event) {
+		var wheelMovement = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)))
+		// ok, I cheated a bit ...
+		d3.event = event
+		// taking the inner svg (histSvg) as a references point does not work. the object needs to be inside it
+		var mouse = d3.mouse(d3.select("#histRect").node())
+
+		var xDelta = histViewBox.width * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+		var yDelta = histViewBox.height * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
+
+		// keep bottom line stable!
+		//var bottom = svgViewbox.y+svgViewbox.height
+
+		// zoom towards the current mouse position
+		var relX = (mouse[0]-histViewBox.x)/histViewBox.width // in [0,1]
+		var relY = (mouse[1]-histViewBox.y)/histViewBox.height // in [0,1]
+		histViewBox.width += xDelta
+		histViewBox.height += yDelta
+		histViewBox.x -= xDelta * relX
+		histViewBox.y -= yDelta * relY
+		//svgViewbox.y = bottom - svgViewbox.height
+		d3.event = null
+
+		updateHistogramViewbox(true/* with transition */)
 	}
 
 	function adaptivePictureLoad() {
@@ -96,13 +146,13 @@ var vikus = (function(vikus = {}) {
 		if (obj)
 			allValues(obj).forEach(function(e) {
 				if (e.histogramRect) {
-					var size = svgViewboxWidth < 100 ? 500 : 100
+					var size = histViewBox.width < 100 ? (histViewBox.width < 20 ? 1000 : 500) : 100
 					var bb = e.histogramRect.node().getBoundingClientRect()
 					//console.log(bb)
 					var insideWindow = !(bb.right < 0 || bb.bottom < 0 || bb.left > windowWidth || bb.top > windowHeight)
 					if (insideWindow) {
 						e.histogramImage.attr("xlink:href", "data/bilder_"+size+"/"+e.id+".jpg")
-						if (size === 500 || false) // debug
+						if (size > 100 && false) // debug
 							e.histogramRect.style({fill: "green"})
 					}
 				}
@@ -257,7 +307,7 @@ var vikus = (function(vikus = {}) {
 		console.assert(groesteZeit === endYear)
 
 		var text = svg.append("text")
-			.attr("x", svgViewboxX+svgViewboxWidth-100).attr("y", svgViewboxY+20)
+			.attr("x", svgViewbox.x+svgViewbox.width-100).attr("y", svgViewbox.y+20)
 			.text("position")
 
 		svg.on("mousemove", () => {
@@ -304,61 +354,29 @@ var vikus = (function(vikus = {}) {
 	}
 
 
-
-	function setupUIeventListeners() {
-		function zoom(event) {
-			var wheelMovement = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)))
-			// ok, I cheated a bit ...
-			d3.event = event
-			var mouse = d3.mouse(domSvg)
-
-			var xDelta = svgViewboxWidth * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
-			var yDelta = svgViewboxHeight * (wheelMovement < 0 ? zoomFactor-1 : -(1-1/zoomFactor))
-
-			// keep bottom line stable!
-			//var bottom = svgViewboxY+svgViewboxHeight
-
-			// zoom towards the current mouse position
-			var relX = (mouse[0]-svgViewboxX)/svgViewboxWidth // in [0,1]
-			var relY = (mouse[1]-svgViewboxY)/svgViewboxHeight // in [0,1]
-			svgViewboxWidth += xDelta
-			svgViewboxHeight += yDelta
-			svgViewboxX -= xDelta * relX
-			svgViewboxY -= yDelta * relY
-			//svgViewboxY = bottom - svgViewboxHeight
-			d3.event = null
-
-			//numberOfInBarColumns +=wheelMovement
-			//draw()
-
-			updateViewbox(true/* with transition */)
-		}
-
-		// IE9, Chrome, Safari, Opera
-		domSvg.addEventListener("mousewheel", zoom, false)
-		// Firefox
-		domSvg.addEventListener("DOMMouseScroll", zoom, false)
-
-		svg.call(d3.behavior.drag()
-			.on("drag", function (d) {
-				svgViewboxX -= d3.event.dx*(svgViewboxWidth/svgWidth)
-					// keep bottom line stable!
-				svgViewboxY -= d3.event.dy*(svgViewboxHeight/svgHeight)
-				updateViewbox()
-			})
-		)
-	}
-
-
 	function histogram() {
 		var numberOfBars = 46
 		var currentYear = 1810
 		var currentAmount = 0
 
-		if (!histG) {
-			histG = svg.append("g").attr("transform", "translate(-500,-10)")
-			histG.append("rect").attr(histBox)
-				.style({fill: "#000", "fill-opacity": 0.05})
+		if (!histSvg) {
+			// INNER SVG (!)
+			histSvg = svg.append("svg").attr({id: "histogram", x: -500, y: -50, width: histBox.width, height: histBox.height})
+			setViewBox(histSvg, histViewBox)
+			histSvg.append("rect").attr(histBox).attr("id", "histRect")
+				.style({fill: "#fff", "fill-opacity": 0.05})
+
+			histSvg.call(d3.behavior.drag()
+				.on("drag", function (d) {
+					histViewBox.x -= d3.event.dx*(histViewBox.width/svgWidth)
+					// keep bottom line stable!
+					histViewBox.y -= d3.event.dy*(histViewBox.height/svgHeight)
+					updateHistogramViewbox()
+				})
+			)
+
+			histSvg.node().addEventListener("mousewheel", histZoom, false)
+			histSvg.node().addEventListener("DOMMouseScroll", histZoom, false)
 		}
 
 		var sortedByYear = allValues(obj).sort((a,b) => a.jahr > b.jahr ? 1 : -1)
@@ -389,8 +407,8 @@ var vikus = (function(vikus = {}) {
 			var x = (currentYear-startYear)/(endYear-startYear+1)*histBox.width + inBarColumnNo*blockTotal
 			var y = histBox.height-(1+currentAmount-inBarColumnNo*totalPerInBarColumn) *blockTotal
 
-			e.histogramRect = e.histogramRect ? e.histogramRect : histG.append("rect").style({fill: histElemBaseFill})
-			e.histogramImage = e.histogramImage ? e.histogramImage : histG.append("image")
+			e.histogramRect = e.histogramRect ? e.histogramRect : histSvg.append("rect").style({fill: histElemBaseFill})
+			e.histogramImage = e.histogramImage ? e.histogramImage : histSvg.append("image")
 				.attr({"xlink:href": "data/bilder_100/"+e.id+".jpg", onclick: "document.location.href = 'http://bestandskataloge.spsg.de/FWIV/"+e.id+"';"})
 
 			e.histogramRect
@@ -459,8 +477,8 @@ var vikus = (function(vikus = {}) {
 
 				var text = tagCloudG.append("text")
 					.attr("x", yVal*1000)
-					.attr("y", 4*count++)
-					.attr("font-size", 10*scale)
+					.attr("y", 3.2*count++)
+					.attr("font-size", 9*scale)
 					.attr("text-anchor", "middle")
 					.text(tag.name)
 
@@ -553,13 +571,16 @@ var vikus = (function(vikus = {}) {
 			reduceOverlap()
 			scaleIntoBox()
 		}
-
 	}
 
 
 
 	// global tools
 	allValues = obj => Object.keys(obj).map(key => obj[key])
+
+	function setViewBox(d3Elem, boxObj) {
+		return d3Elem.attr("viewBox", boxObj.x+" "+boxObj.y+" "+boxObj.width+" "+boxObj.height)
+	}
 
 	console.logToHTML = function(x) {
 		document.body.appendChild(document.createTextNode(x))

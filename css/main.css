@@ -16,4 +16,17 @@ body {
 }
 #tagCloud text {
 	fill: white;
+	cursor: pointer;
+	transition: all 200ms ease-in-out;
+	transform-origin: center center;
+}
+#tagCloud text:hover {
+	text-shadow: 1px 1px 3px rgba(255, 0, 0, 1);
+	transform: scale(1.3);
+}
+#histogram {
+	cursor: move;
+}
+#histogram image {
+	cursor: pointer;
 }
